@@ -33,7 +33,8 @@ class DataHarmonizer:
         "Dẫn động",
         "Mô tả",
         "Link",
-        "Website"
+        "Website",
+        "vehicle_type"
     ]
 
     def __init__(self, raw_data_dir: Union[str, Path], output_path: Union[str, Path]):
@@ -68,6 +69,7 @@ class DataHarmonizer:
             else:
                 df["Website"] = "unknown"
 
+            df["vehicle_type"] = "oto_dien"
             return self._enforce_schema(df, filename)
         except Exception:
             logger.exception(f"Failed to process {filename}")
@@ -100,6 +102,7 @@ class DataHarmonizer:
             df["Hộp số"] = "Số tự động"
             df["Động cơ"] = "Điện"
             df["Website"] = "otodien.vn"
+            df["vehicle_type"] = "oto_dien"
 
             return self._enforce_schema(df, filename)
 
@@ -137,9 +140,50 @@ class DataHarmonizer:
 
             df = df.rename(columns=column_mapping)
             df["Website"] = "chotot.com"
+            df["vehicle_type"] = "oto_dien"
 
             return self._enforce_schema(df, filename)
 
+        except Exception:
+            logger.exception(f"Failed to process {filename}")
+            return pd.DataFrame(columns=self.CORE_FEATURES)
+
+    def process_chotot_ev_json(self, filename: str, vehicle_type: str) -> pd.DataFrame:
+        """Processes Chotot motorbike/bicycle JSON from Gateway API scraper.
+
+        Uses the same column mapping as the car spider output.
+        """
+        filepath = self.raw_data_dir / filename
+        try:
+            with open(filepath, 'r', encoding='utf-8-sig') as f:
+                data = json.load(f)
+
+            df = pd.json_normalize(data)
+
+            column_mapping = {
+                "exact_date_posted": "Ngày đăng",
+                "ad.subject": "Tên xe",
+                "ad.price": "Giá",
+                "ad.account_name": "Tên người bán",
+                "ad_params.address.value": "Địa chỉ",
+                "ad_params.mfdate.value": "Năm sản xuất",
+                "ad_params.condition_ad.value": "Tình trạng",
+                "ad_params.mileage_v2.value": "Số Km đã đi",
+                "ad_params.fuel.value": "Động cơ",
+                "ad_params.motorbiketype.value": "Kiểu dáng",
+                "ad.body": "Mô tả",
+                "url": "Link"
+            }
+
+            df = df.rename(columns=column_mapping)
+            df["Website"] = "chotot.com"
+            df["vehicle_type"] = vehicle_type
+
+            return self._enforce_schema(df, filename)
+
+        except FileNotFoundError:
+            logger.warning(f"File not found: {filename}. Skipping.")
+            return pd.DataFrame(columns=self.CORE_FEATURES)
         except Exception:
             logger.exception(f"Failed to process {filename}")
             return pd.DataFrame(columns=self.CORE_FEATURES)
@@ -153,14 +197,20 @@ class DataHarmonizer:
         df_otodien = self.process_otodien("data_xe_dien_web_otodien.csv")
         df_chotot = self.process_chotot_json("chotot/cars.json")
 
+        # New EV sources: motorbikes & bicycles from Chotot
+        df_motorbike = self.process_chotot_ev_json("chotot/motorbikes.json", "xe_may_dien")
+        df_bicycle = self.process_chotot_ev_json("chotot/bicycles.json", "xe_dap_dien")
+
         logger.info("Concatenating datasets.")
-        merged_df = pd.concat([df_bonbanh, df_vinfast, df_otodien, df_chotot], ignore_index=True)
+        all_dfs = [df_bonbanh, df_vinfast, df_otodien, df_chotot, df_motorbike, df_bicycle]
+        merged_df = pd.concat(all_dfs, ignore_index=True)
 
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
         merged_df.to_csv(self.output_path, index=False, encoding='utf-8-sig')
 
         logger.info(f"Successfully exported harmonized dataset to {self.output_path}")
         logger.info(f"Total records: {len(merged_df)}")
+        logger.info(f"By vehicle_type: {merged_df['vehicle_type'].value_counts().to_dict()}")
 
 
 if __name__ == "__main__":

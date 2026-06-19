@@ -80,10 +80,11 @@ class DataPreprocessor:
         logger.info("Cleaning whitespace and line breaks from 'Tên xe'...")
         df['Tên xe'] = df['Tên xe'].apply(self.clean_text_formatting)
 
-        ice_models = ['fadil', 'lux a', 'lux sa', 'president']
-        ice_pattern = '|'.join(ice_models)
+        # ICE model patterns for both cars and motorbikes
+        ice_car_models = ['fadil', 'lux a', 'lux sa', 'president']
+        ice_pattern = '|'.join(ice_car_models)
 
-        is_combustion_engine = df['Động cơ'].astype(str).str.lower().isin(['xăng', 'dầu'])
+        is_combustion_engine = df['Động cơ'].astype(str).str.lower().isin(['xăng', 'dầu', 'xăng/dầu'])
 
         is_ice_model = df['Tên xe'].str.lower().str.contains(ice_pattern, na=False)
 

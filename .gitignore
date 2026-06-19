@@ -569,3 +569,8 @@ cython_debug/
 
 # Claude
 .claude
+
+# Ignore data
+data/raw/*
+data/interim/*
+!data/processed/*

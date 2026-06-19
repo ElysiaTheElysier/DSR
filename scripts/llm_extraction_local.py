@@ -39,43 +39,44 @@ class VehicleExtraction(BaseModel):
     battery_status: Optional[str] = Field(default=None)
     is_accident_free: Optional[bool] = Field(default=None)
     has_aftermarket_mods: Optional[bool] = Field(default=False)
+    vehicle_type: Optional[str] = Field(default=None)
 
 
 SYSTEM_PROMPT = """
 You are a precise Data Extraction Pipeline. Extract vehicle data into a strict JSON object.
 
-EXAMPLE INPUT:
+EXAMPLE 1 (Car):
 ID: 99
 Name: Xe VinFast VF8 Plus 2023
 Desc: Bán xe cũ chạy 1 vạn, zin keng, đã lên cam 360, mua đứt pin.
 
-EXAMPLE OUTPUT:
-{
-  "id": 99,
-  "reasoning": "chạy 1 vạn, zin keng, lên cam 360",
-  "brand": "VinFast",
-  "car_model": "VF8 Plus",
-  "imputed_year": 2023,
-  "imputed_mileage_km": 10000,
-  "imputed_condition": "Đã qua sử dụng",
-  "battery_status": "Mua pin",
-  "is_accident_free": true,
-  "has_aftermarket_mods": true
-}
+OUTPUT:
+{"id": 99, "reasoning": "chạy 1 vạn, zin keng, lên cam 360", "brand": "VinFast", "car_model": "VF8 Plus", "imputed_year": 2023, "imputed_mileage_km": 10000, "imputed_condition": "Đã qua sử dụng", "battery_status": "Mua pin", "is_accident_free": true, "has_aftermarket_mods": true, "vehicle_type": "oto_dien"}
 
-OUTPUT TEMPLATE (Fill this out for the provided user input):
-{
-  "id": <ID>,
-  "reasoning": "<quote short vietnamese keywords>",
-  "brand": null,
-  "car_model": null,
-  "imputed_year": null,
-  "imputed_mileage_km": null,
-  "imputed_condition": "Mới 100% or Đã qua sử dụng or null",
-  "battery_status": "Mua pin or Thuê pin or null",
-  "is_accident_free": null,
-  "has_aftermarket_mods": false
-}
+EXAMPLE 2 (Electric Motorbike):
+ID: 200
+Name: VinFast Feliz S 2024 Trắng
+Desc: Bán xe điện Feliz S, odo 2000km, xe mới 98%, sạc đầy đi 100km.
+
+OUTPUT:
+{"id": 200, "reasoning": "odo 2000km, mới 98%, sạc đầy 100km", "brand": "VinFast", "car_model": "Feliz S", "imputed_year": 2024, "imputed_mileage_km": 2000, "imputed_condition": "Đã qua sử dụng", "battery_status": null, "is_accident_free": null, "has_aftermarket_mods": false, "vehicle_type": "xe_may_dien"}
+
+EXAMPLE 3 (Electric Bicycle):
+ID: 300
+Name: Xe đạp điện Yadea M6L 2023
+Desc: Xe đạp điện mới 90%, bình ắc quy mới thay, chạy 50km/lần sạc.
+
+OUTPUT:
+{"id": 300, "reasoning": "mới 90%, bình ắc quy mới thay", "brand": "Yadea", "car_model": "M6L", "imputed_year": 2023, "imputed_mileage_km": null, "imputed_condition": "Đã qua sử dụng", "battery_status": null, "is_accident_free": null, "has_aftermarket_mods": false, "vehicle_type": "xe_dap_dien"}
+
+RULES:
+- vehicle_type: "oto_dien" for cars, "xe_may_dien" for motorbikes/scooters, "xe_dap_dien" for e-bikes.
+- 1 vạn = 10000 km. 
+- If absent from text, return null. DO NOT guess.
+- Return ONLY valid JSON, no extra text.
+
+OUTPUT TEMPLATE:
+{"id": <ID>, "reasoning": "<keywords>", "brand": null, "car_model": null, "imputed_year": null, "imputed_mileage_km": null, "imputed_condition": null, "battery_status": null, "is_accident_free": null, "has_aftermarket_mods": false, "vehicle_type": null}
 """
 
 
