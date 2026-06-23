@@ -1,0 +1,11 @@
+# configs/local_llm_config.yaml
+pipeline:
+  input_file: "data/interim/ev_cleaned_rule_based.csv"
+  output_dir: "data/interim/"
+  default_model: "qwen2.5:3b"  # Keep your 4B model
+  batch_size: 1
+
+ollama_options:
+  num_ctx: 1024         # Cut this down from 2048 to free up VRAM
+  temperature: 0.0
+  seed: 42
