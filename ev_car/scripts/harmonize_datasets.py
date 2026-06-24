@@ -13,27 +13,21 @@ class DataHarmonizer:
     and load them into a single merged CSV.
     """
 
-    CORE_FEATURES = [
-        "Ngày đăng",
+    FINAL_COLUMNS = [
+        "Website",
+        "Link",
         "Tên xe",
         "Giá",
+        "Ngày đăng",
         "Tên người bán",
         "Địa chỉ",
         "Năm sản xuất",
         "Tình trạng",
         "Số Km đã đi",
-        "Xuất xứ",
         "Kiểu dáng",
-        "Hộp số",
-        "Động cơ",
         "Màu ngoại thất",
-        "Màu nội thất",
         "Số chỗ ngồi",
-        "Số cửa",
-        "Dẫn động",
         "Mô tả",
-        "Link",
-        "Website",
         "vehicle_type"
     ]
 
@@ -42,45 +36,42 @@ class DataHarmonizer:
         self.output_path = Path(output_path)
 
     def _enforce_schema(self, df: pd.DataFrame, source_name: str) -> pd.DataFrame:
-        """
-        Ensures the dataframe has exactly the CORE_FEATURES.
-        Missing columns are filled with NaN. Extra columns are dropped.
-        """
-        for col in self.CORE_FEATURES:
+        """Ensures the DataFrame matches the final schema, adding NaNs where missing."""
+        for col in self.FINAL_COLUMNS:
             if col not in df.columns:
                 df[col] = np.nan
-
-        logger.info(f"[{source_name}] Schema enforced. Output shape: {df[self.CORE_FEATURES].shape}")
-        return df[self.CORE_FEATURES]
+        df_out = df[self.FINAL_COLUMNS].copy()
+        logger.info(f"[{source_name}] Schema enforced. Output shape: {df_out.shape}")
+        return df_out
 
     def process_standard_csv(self, filename: str) -> pd.DataFrame:
-        """Processes datasets that already perfectly match the core features.
-
-        Add a 'Website' column based on filename heuristics to identify the source platform.
-        """
+        """Processes CSV files that already have standard Vietnamese columns (Bonbanh, VinfastLuot)."""
         filepath = self.raw_data_dir / filename
         try:
-            df = pd.read_csv(filepath, encoding="utf-8-sig")
-
-            if "bonbanh" in filename.lower():
-                df["Website"] = "bonbanh.com"
-            elif "vinfastluot" in filename.lower():
-                df["Website"] = "xevinfastluot.com"
-            else:
-                df["Website"] = "unknown"
-
-            df["vehicle_type"] = "oto_dien"
+            df = pd.read_csv(filepath, encoding='utf-8')
+            if 'Website' not in df.columns:
+                df['Website'] = 'bonbanh.com' if 'bonbanh' in filename else 'xevinfastluot.vn'
+            if 'vehicle_type' not in df.columns:
+                df['vehicle_type'] = 'oto_dien'
+            if 'Động cơ' in df.columns:
+                df = df[~df['Động cơ'].astype(str).str.lower().isin(['xăng', 'dầu', 'xăng/dầu', 'hybrid'])]
             return self._enforce_schema(df, filename)
         except Exception:
             logger.exception(f"Failed to process {filename}")
-            return pd.DataFrame(columns=self.CORE_FEATURES)
+            return pd.DataFrame(columns=self.FINAL_COLUMNS)
 
     def process_otodien(self, filename: str) -> pd.DataFrame:
         """Processes Otodien by mapping available columns and handling implicit EV data.
 
-        Otodien's is 100% EV platform, so we can safely impute 'Hộp số' to 'Số tự động' and 'Động cơ' to 'Điện'
-        for all records.
+        Otodien is a 100% EV platform, so we can safely impute:
+        - 'Hộp số' → 'Số tự động'
+        - 'Động cơ' → 'Điện'
+        - 'Xuất xứ' → extracted from title/description or 'Lắp ráp trong nước' (default for VinFast)
+        
+        We also extract 'Năm sản xuất' from the title (pattern: "VinFast VF8 2023 Plus")
+        and impute 'Tình trạng' / 'Số Km đã đi' based on description context.
         """
+        import re
         filepath = self.raw_data_dir / filename
         try:
             df = pd.read_csv(filepath)
@@ -91,6 +82,9 @@ class DataHarmonizer:
                 "Tiền (VNĐ)": "Giá",
                 "Người dùng": "Tên người bán",
                 "Vị trí": "Địa chỉ",
+                "Năm sản xuất": "Năm sản xuất_raw",
+                "Tình trạng": "Tình trạng_raw",
+                "Số Km đã đi": "Số Km đã đi_raw",
                 "Kiểu dáng": "Kiểu dáng",
                 "Màu bên ngoài": "Màu ngoại thất",
                 "Số chỗ ngồi": "Số chỗ ngồi",
@@ -99,8 +93,72 @@ class DataHarmonizer:
             }
             df = df.rename(columns=column_mapping)
 
-            df["Hộp số"] = "Số tự động"
-            df["Động cơ"] = "Điện"
+            # --- Extract Năm sản xuất from title ---
+            def extract_year(row):
+                raw_year = row.get("Năm sản xuất_raw")
+                if pd.notna(raw_year) and str(raw_year).strip() != "":
+                    try:
+                        return int(float(raw_year))
+                    except:
+                        pass
+                
+                title = row.get("Tên xe")
+                if pd.isna(title):
+                    return np.nan
+                match = re.search(r'\b(20[1-3]\d)\b', str(title))
+                return int(match.group(1)) if match else np.nan
+            df["Năm sản xuất"] = df.apply(extract_year, axis=1)
+
+            # --- Impute Tình trạng from Mô tả ---
+            def extract_condition(row):
+                raw_cond = str(row.get("Tình trạng_raw", ""))
+                if "mới" in raw_cond.lower() or "đã sử dụng" in raw_cond.lower():
+                    return raw_cond.strip()
+                    
+                desc = str(row.get("Mô tả", "")).lower()
+                title = str(row.get("Tên xe", "")).lower()
+                combined = title + " " + desc
+                used_keywords = ["đã qua sử dụng", "secondhand", "cũ", "đã đi", "odo", "km đã đi", "lướt"]
+                new_keywords = ["xe mới", "mới 100%", "chưa lăn bánh", "giao ngay", "mới giao", "new"]
+                for kw in used_keywords:
+                    if kw in combined:
+                        return "Đã sử dụng"
+                for kw in new_keywords:
+                    if kw in combined:
+                        return "Xe mới"
+                return np.nan
+            df["Tình trạng"] = df.apply(extract_condition, axis=1)
+
+            # --- Impute Số Km đã đi from Mô tả ---
+            def extract_mileage(row):
+                raw_km = str(row.get("Số Km đã đi_raw", ""))
+                if pd.notna(raw_km) and raw_km.strip() not in ["", "nan", "None"]:
+                    return raw_km.strip()
+                    
+                desc = str(row.get("Mô tả", ""))
+                title = str(row.get("Tên xe", ""))
+                combined = title + " " + desc
+                # Try to find patterns like "odo 12,000km", "1000 km", etc.
+                match = re.search(r'(?:odo|ODO|km đã đi|đã đi)\s*[:\-]?\s*([\d,.]+)\s*(?:km|Km|KM)?', combined)
+                if match:
+                    km_str = match.group(1).replace(',', '').replace('.', '')
+                    try:
+                        return f"{int(km_str):,} Km"
+                    except:
+                        pass
+                match2 = re.search(r'([\d,.]+)\s*(?:km|Km|KM)\s*(?:đã đi|đã chạy)', combined)
+                if match2:
+                    km_str = match2.group(1).replace(',', '').replace('.', '')
+                    try:
+                        return f"{int(km_str):,} Km"
+                    except:
+                        pass
+                if row.get("Tình trạng") == "Xe mới":
+                    return "0 Km"
+                return np.nan
+            df["Số Km đã đi"] = df.apply(extract_mileage, axis=1)
+
+            # --- Static imputation for EV-only platform ---
             df["Website"] = "otodien.vn"
             df["vehicle_type"] = "oto_dien"
 
@@ -108,7 +166,7 @@ class DataHarmonizer:
 
         except Exception:
             logger.exception(f"Failed to process {filename}")
-            return pd.DataFrame(columns=self.CORE_FEATURES)
+            return pd.DataFrame(columns=self.FINAL_COLUMNS)
 
     def process_chotot_json(self, filename: str) -> pd.DataFrame:
         """Flattens the JSON and maps the deeply nested Chotot features."""
@@ -146,7 +204,7 @@ class DataHarmonizer:
 
         except Exception:
             logger.exception(f"Failed to process {filename}")
-            return pd.DataFrame(columns=self.CORE_FEATURES)
+            return pd.DataFrame(columns=self.FINAL_COLUMNS)
 
     def process_chotot_ev_json(self, filename: str, vehicle_type: str) -> pd.DataFrame:
         """Processes Chotot motorbike/bicycle JSON from Gateway API scraper.
@@ -183,10 +241,10 @@ class DataHarmonizer:
 
         except FileNotFoundError:
             logger.warning(f"File not found: {filename}. Skipping.")
-            return pd.DataFrame(columns=self.CORE_FEATURES)
+            return pd.DataFrame(columns=self.FINAL_COLUMNS)
         except Exception:
             logger.exception(f"Failed to process {filename}")
-            return pd.DataFrame(columns=self.CORE_FEATURES)
+            return pd.DataFrame(columns=self.FINAL_COLUMNS)
 
     def run_pipeline(self) -> None:
         """Executes the extraction, mapping, and merging process."""

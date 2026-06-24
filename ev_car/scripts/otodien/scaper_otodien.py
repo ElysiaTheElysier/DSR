@@ -13,6 +13,7 @@ LISTING_URL = "https://otodien.vn/oto"
 CSV_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "data", "raw", "otodien", "data_xe_dien.csv")
 
 HEADERS = ['ID', 'Tên', 'Tiền (VNĐ)', "Vị trí", 'Ngày đăng', 'Người dùng','Sao','Đã bán', 'Đang bán',
+           'Năm sản xuất', 'Tình trạng', 'Số Km đã đi',
            'Thông tin mô tả', 'Tính năng nổi bật', 'Tính năng khác',
            'Kiểu dáng', 'Màu bên ngoài', 'Chiều dài(mm)', 'Chiều dài cơ sở(mm)', 'Chiều rộng(mm)',
            'khoảng sáng gầm(mm)', 'Số chỗ ngồi', 'Trọng lượng bản thân (kg)', 'Trọng lượng toàn tải (kg)',
@@ -115,6 +116,25 @@ def extract_data(link: str):
     row.append("") # 6
     row.append(str(item.get('sold_ev', 0))) # 7
     row.append(str(item.get('publish_ev', 0))) # 8
+    
+    row.append(str(item.get('year', '')))
+    
+    cond_val = item.get('condition')
+    if cond_val == 1:
+        row.append("Xe mới")
+    elif cond_val == 2:
+        row.append("Đã sử dụng")
+    else:
+        row.append("")
+        
+    mileage = item.get('mileage')
+    if mileage is not None:
+        row.append(str(mileage) + " Km")
+    elif cond_val == 1:
+        row.append("0 Km")
+    else:
+        row.append("")
+        
     desc = item.get('description', '')
     if isinstance(desc, str):
         row.append(desc.replace('\n', '-').replace('\r', ''))

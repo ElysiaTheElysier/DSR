@@ -1,7 +1,7 @@
 import anthropic
 
 client = anthropic.Anthropic(
-    api_key="AGOP-BAE4-B148-1E86"  
+    api_key="YOUR_API_KEY"
 )
 
 response = client.messages.create(

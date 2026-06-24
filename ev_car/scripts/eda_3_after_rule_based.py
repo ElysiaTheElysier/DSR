@@ -56,9 +56,13 @@ def generate_plots(df, prefix, out_dir):
 
     # 4. Missing Data
     missing_perc = df.isna().mean() * 100
+    missing_perc = missing_perc[missing_perc > 0]
     plt.figure(figsize=(10, 8))
-    top_missing = missing_perc.sort_values(ascending=False).head(20)
-    sns.barplot(x=top_missing.values, y=top_missing.index, palette="viridis", hue=top_missing.index, legend=False)
+    if len(missing_perc) > 0:
+        top_missing = missing_perc.sort_values(ascending=False).head(20)
+        sns.barplot(x=top_missing.values, y=top_missing.index, palette="viridis", hue=top_missing.index, legend=False)
+    else:
+        plt.text(0.5, 0.5, 'No Missing Data', horizontalalignment='center', verticalalignment='center', fontsize=20)
     plt.title(f"Missing Data Percentage - {prefix}")
     plt.xlabel("Percentage (%)")
     plt.tight_layout()
@@ -79,7 +83,10 @@ def main():
         
         # Copy CSV
         print(f"Copying {prefix} CSV to EDA folder...")
-        shutil.copy(file_path, REPORT_DIR)
+        try:
+            shutil.copy(file_path, REPORT_DIR)
+        except PermissionError:
+            print(f"Warning: Could not copy {file_path} because it is currently open in another program (e.g. Excel).")
         
     print(f"Done EDA Phase 3. Reports and data in: {REPORT_DIR}")
 

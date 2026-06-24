@@ -10,7 +10,7 @@ import json
 import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-API_KEYS = ["AGOP-DA2E-D3BD-59CF", "AGOP-BAE4-B148-1E86"]
+API_KEYS = ["YOUR_API_KEY_1", "YOUR_API_KEY_2"]
 BASE_URL = "https://api.nkq.vn"
 MODEL = "claude-3-5-sonnet-20241022"
 
@@ -27,7 +27,7 @@ RULES:
 
 OUTPUT TEMPLATE (Return ONLY this JSON structure without markdown formatting):
 {
-    "id": <ID>, 
+    "Link": "<string>", 
     "reasoning": "<keywords>", 
     "brand": "<string or null>", 
     "car_model": "<string or null>", 
@@ -84,17 +84,18 @@ class AnthropicExtractionPipeline:
         )
         return response.content[0].text
 
-    def process_row(self, row, idx):
+    def process_row(self, row):
         clean_name = self.sanitize_text(row['Tên xe'])
         clean_desc = self.sanitize_text(row.get('Mô tả', ''))
-        payload = f"ID: {idx}\nName: {clean_name}\nDesc: {clean_desc[:2000]}\n\nJSON Output:\n"
+        link = row['Link']
+        payload = f"Link: {link}\nName: {clean_name}\nDesc: {clean_desc[:2000]}\n\nJSON Output:\n"
         
         # NO try-except block here. Let it crash so we know exactly what is wrong.
         raw_output = self._call_api(payload)
         clean_json = self.extract_json_block(raw_output)
         data_dict = json.loads(clean_json)
-        # Ensure ID is correct
-        data_dict['id'] = idx
+        # Ensure Link is correct
+        data_dict['Link'] = link
         return data_dict
 
     def run(self):
@@ -103,9 +104,12 @@ class AnthropicExtractionPipeline:
         
         if self.output_file.exists():
             existing_df = pd.read_csv(self.output_file)
-            processed_ids = set(existing_df['id'].unique())
-            df_to_process = df[~df.index.isin(processed_ids)]
-            logger.info(f"Resuming {self.input_file.name}: {len(processed_ids)} already processed. {len(df_to_process)} records remaining.")
+            if 'Link' in existing_df.columns:
+                processed_links = set(existing_df['Link'].unique())
+            else:
+                processed_links = set()
+            df_to_process = df[~df['Link'].isin(processed_links)]
+            logger.info(f"Resuming {self.input_file.name}: {len(processed_links)} already processed. {len(df_to_process)} records remaining.")
         else:
             df_to_process = df
             logger.info(f"Starting {self.input_file.name}. Processing {len(df_to_process)} records.")
@@ -114,7 +118,7 @@ class AnthropicExtractionPipeline:
             logger.success(f"All records for {self.input_file.name} have been processed!")
             return
 
-        tasks = [(row, idx) for idx, row in df_to_process.iterrows()]
+        tasks = [row for _, row in df_to_process.iterrows()]
         
         batch_size = 50 
         results_buffer = []
@@ -122,7 +126,7 @@ class AnthropicExtractionPipeline:
         write_header = not self.output_file.exists()
         
         with ThreadPoolExecutor(max_workers=30) as executor:
-            futures = {executor.submit(self.process_row, task[0], task[1]): task[1] for task in tasks}
+            futures = {executor.submit(self.process_row, task): task for task in tasks}
             
             for future in tqdm(as_completed(futures), total=len(futures), desc=f"Extracting {self.input_file.name}"):
                 # NO try-except on future.result(). If it fails, the script crashes.

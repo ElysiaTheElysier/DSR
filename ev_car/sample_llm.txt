@@ -1,0 +1,18 @@
+=== RAW DATA ===
+TÊN XE: Vinfast VF9 Plus 2023
+MÔ TẢ: Vinfast VF9 Plus 2023 Odo 1,4v Km xe đẹp kính koong từ trong ra ngoài, Full lịch sử hãng, xe miễn phí sạc đến 7/2027… Cam kết đầy đủ lịch sử hãng, keo chỉ nguyên zin không đâm đụng, va chạm, ngập nước.
+
+=== LLM JSON ===
+{
+    "id": 0, 
+    "reasoning": "Vinfast VF9 Plus 2023, Odo 1,4v Km, xe đẹp, lịch sử hãng, không đâm đụng, va chạm, ngập nước",
+    "brand": "Vinfast", 
+    "car_model": "VF9 Plus", 
+    "imputed_year": 2023, 
+    "imputed_mileage_km": 0, 
+    "imputed_condition": "Mới 100%", 
+    "battery_status": null, 
+    "is_accident_free": true, 
+    "has_aftermarket_mods": false, 
+    "vehicle_type": "oto_dien"
+}

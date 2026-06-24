@@ -1,10 +1,14 @@
 import os
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
+from tenacity import retry, wait_exponential, stop_after_attempt
+import time
 
 def get_value_exact(soup, label_name):
     rows = soup.find_all('div', class_=['row', 'row_last'])
@@ -16,21 +20,24 @@ def get_value_exact(soup, label_name):
                 return input_div.text.strip()
     return "N/A"
 
+@retry(wait=wait_exponential(multiplier=2, min=2, max=30), stop=stop_after_attempt(5))
 def get_car_details(url):
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Referer": "https://bonbanh.com/"
         }
-        # Increased timeout slightly for concurrent connections
         response = requests.get(url, headers=headers, timeout=15)
         if response.status_code != 200:
-            return None
+            raise Exception("Status not 200")
             
         soup = BeautifulSoup(response.content, "html.parser")
 
         title_tag = soup.find("h1")
-        full_title = title_tag.text.strip() if title_tag else "N/A"
+        if not title_tag:
+            raise Exception("Captcha or block detected, retrying...")
+            
+        full_title = title_tag.text.strip()
         clean_title = re.sub(r'[-–—−]', '-', full_title) 
         
         ten_xe = clean_title
@@ -86,7 +93,7 @@ def get_car_details(url):
         }
         return car_info
     except Exception as e:
-        return None
+        raise e
 
 def fetch_page_links(page):
     headers = {
@@ -114,9 +121,9 @@ def main():
     print("Step 1: Quét tất cả các trang gom link (Chế độ ĐA LUỒNG CỰC ĐẠI)...")
     all_links = set()
     
-    # Bonbanh pagination has ~141 pages. We can query up to 150 pages in parallel.
+    # Bonbanh pagination has ~141 pages.
     pages = list(range(1, 160))
-    with ThreadPoolExecutor(max_workers=30) as executor:
+    with ThreadPoolExecutor(max_workers=10) as executor:
         futures = {executor.submit(fetch_page_links, p): p for p in pages}
         for future in tqdm(as_completed(futures), total=len(pages), desc="Fetching Pages"):
             links = future.result()
@@ -126,15 +133,18 @@ def main():
     all_links = list(all_links)
     print(f"\n=> TỔNG CỘNG: Gom được {len(all_links)} link xe điện từ tất cả các trang.")
     
-    print("\nStep 2: Bắt đầu lấy thông số chi tiết (Max workers: 50)...")
+    print("\nStep 2: Bắt đầu lấy thông số chi tiết (Max workers: 5)...")
     all_cars_data = []
     
-    with ThreadPoolExecutor(max_workers=50) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(get_car_details, link): link for link in all_links}
         for future in tqdm(as_completed(futures), total=len(all_links), desc="Scraping Details"):
-            res = future.result()
-            if res:
-                all_cars_data.append(res)
+            try:
+                res = future.result()
+                if res:
+                    all_cars_data.append(res)
+            except Exception as e:
+                print(f"Skipping a car due to persistent block: {e}")
 
     if all_cars_data:
         df = pd.DataFrame(all_cars_data)

@@ -4,6 +4,7 @@ import numpy as np
 from loguru import logger
 from pathlib import Path
 from typing import Union
+import emoji
 
 
 class DataPreprocessor:
@@ -17,10 +18,15 @@ class DataPreprocessor:
         self.output_dir = Path(output_dir)
 
     def clean_text_formatting(self, text: str) -> str:
-        """Removes messy line breaks, tabs, and multiple spaces from scraped text."""
+        """Removes messy line breaks, tabs, multiple spaces, and emojis from scraped text."""
         if pd.isna(text):
             return ""
-        return re.sub(r'\s+', ' ', str(text)).strip()
+        # Remove emojis
+        text = emoji.replace_emoji(str(text), replace='')
+        # Remove newlines, carriage returns, tabs, and multiple spaces
+        text = re.sub(r'[\r\n\t]+', ' ', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text
 
     def parse_vietnamese_price(self, price_str: str) -> float:
         """
@@ -77,21 +83,49 @@ class DataPreprocessor:
         df = pd.read_csv(self.input_path)
         initial_len = len(df)
 
-        logger.info("Cleaning whitespace and line breaks from 'Tên xe'...")
-        df['Tên xe'] = df['Tên xe'].apply(self.clean_text_formatting)
+        logger.info("Cleaning whitespace, line breaks, and emojis from text columns...")
+        text_cols = ['Tên xe', 'Tên người bán', 'Địa chỉ', 'Mô tả', 'Kiểu dáng', 'Màu ngoại thất', 'Tình trạng']
+        for col in text_cols:
+            if col in df.columns:
+                df[col] = df[col].apply(self.clean_text_formatting)
 
-        # ICE model patterns for both cars and motorbikes
+        # --- Phase 1: Rule-Based Deduplication & Cleaning ---
+        initial_count = len(df)
+        
+        # Filter out ICE car models by name (since Động cơ was removed)
         ice_car_models = ['fadil', 'lux a', 'lux sa', 'president']
         ice_pattern = '|'.join(ice_car_models)
-
-        is_combustion_engine = df['Động cơ'].astype(str).str.lower().isin(['xăng', 'dầu', 'xăng/dầu'])
-
         is_ice_model = df['Tên xe'].str.lower().str.contains(ice_pattern, na=False)
 
-        df_ev = df[~is_combustion_engine & ~is_ice_model].copy()
-        logger.info(f"Purged {initial_len - len(df_ev)} ICE vehicles. {len(df_ev)} EV records remain.")
+        df_ev = df[~is_ice_model].copy()
+        logger.info(f"Purged {initial_count - len(df_ev)} ICE vehicles by name. {len(df_ev)} EV records remain.")
 
         df_ev['Giá_VND'] = df_ev['Giá'].apply(self.parse_vietnamese_price)
+
+        # Otodien prices are in millions (e.g. 286 instead of 286,000,000)
+        is_otodien = df_ev['Website'] == 'otodien.vn'
+        # Multiply by 1M if it's less than 100,000 (meaning it was parsed as raw integer rather than VNĐ)
+        df_ev.loc[is_otodien & (df_ev['Giá_VND'] < 100000), 'Giá_VND'] *= 1_000_000
+
+        # Clean 'Số Km đã đi' to numeric
+        def clean_mileage(val):
+            if pd.isna(val):
+                return np.nan
+            val = str(val).lower().replace('km', '').replace(',', '').replace('.', '').strip()
+            try:
+                return float(val)
+            except:
+                return np.nan
+                
+        df_ev['Số Km đã đi'] = df_ev['Số Km đã đi'].apply(clean_mileage)
+        
+        # Fill missing mileage with 0 for new cars
+        is_new = df_ev['Tình trạng'].astype(str).str.lower().isin(['mới', 'xe mới'])
+        df_ev.loc[is_new & df_ev['Số Km đã đi'].isna(), 'Số Km đã đi'] = 0
+
+        # Purge unrealistic prices (< 10M VND or null)
+        initial_price_len = len(df_ev)
+        df_ev = df_ev[df_ev['Giá_VND'] >= 10_000_000].copy()
 
         cols_to_drop = ['Giá', 'Động cơ', 'Hộp số']
         df_ev = df_ev.drop(columns=[col for col in cols_to_drop if col in df_ev.columns])
@@ -110,6 +144,12 @@ class DataPreprocessor:
         out_oto = self.output_dir / "ev_cleaned_oto.csv"
         out_bike = self.output_dir / "ev_cleaned_bike.csv"
         
+        # Remove 'Số chỗ ngồi', 'Màu ngoại thất', and 'Kiểu dáng' for bikes as requested
+        for col in ['Số chỗ ngồi', 'Màu ngoại thất', 'Kiểu dáng']:
+            if col in df_bike.columns:
+                df_bike = df_bike.drop(columns=[col])
+
+        # Save to interim
         df_oto.to_csv(out_oto, index=False, encoding='utf-8-sig')
         df_bike.to_csv(out_bike, index=False, encoding='utf-8-sig')
         
