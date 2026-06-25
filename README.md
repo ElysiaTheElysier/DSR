@@ -8,37 +8,40 @@ End-to-end pipeline for predicting electric vehicle prices in the Vietnamese mar
 ev_car/
 ├── configs/              # LLM extraction configs (Ollama, OpenAI)
 ├── data/
-│   ├── raw/              # Scraped CSVs per website
+│   ├── raw/              # Scraped CSVs and JSONs per website
 │   ├── interim/          # Harmonized, cleaned, LLM-extracted data
-│   └── processed/        # Model-ready train/test splits, scaler
+│   └── processed/        # Model-ready train/test splits, scaler (cars & two-wheelers)
 ├── docs/
 │   └── research/         # IEEE paper, Beamer presentation, figures
 ├── notebooks/
 │   ├── prep_eda.ipynb    # Data preparation overview
 │   ├── eda.ipynb         # Exploratory data analysis
 │   ├── feature_engineering.ipynb  # Feature pipeline walkthrough
-│   └── project_report.ipynb      # Full project report with plots
-├── reports/              # Generated PDFs from notebooks & models
+│   ├── project_report.ipynb      # Full car project report with plots
+│   └── two_wheelers_analysis.ipynb # Full two-wheeler project report with plots
+├── reports/              # Generated PDFs/CSVs from notebooks & models (cars & two-wheelers)
 ├── scripts/
-│   ├── harmonize_datasets.py     # Merge raw CSVs into unified schema
-│   ├── preprocess_rule_based.py  # Rule-based cleaning
-│   ├── llm_extraction_local.py   # Local LLM feature extraction
-│   └── ...               # Scrapers (bonbanh, chotot, otodien, VFluot)
+│   ├── harmonize_datasets.py     # Merge raw car CSVs into unified schema
+│   ├── preprocess_rule_based.py  # Rule-based cleaning for cars
+│   ├── llm_extraction_local.py   # Local LLM feature extraction for cars
+│   ├── two_wheelers_pipeline.py  # Merge, clean, and align raw two-wheeler JSONs
+│   ├── two_wheelers_llm_extract.py # LLM extraction for two-wheelers
+│   └── ...               # Scrapers (bonbanh, chotot, otodien, VFluot, etc.)
 └── src/
     ├── features/
-    │   ├── build_features.py     # Feature engineering pipeline
-    │   ├── target_encoder.py     # LOO target encoder with smoothing
-    │   └── ev_specs.py           # EV specs lookup from otodien.vn
-    ├── models/
-    │   ├── run_all.py            # Train & benchmark all models
-    │   ├── linear_regression.py  # Ridge regression
-    │   ├── svr.py                # Support vector regression
-    │   ├── random_forest.py      # Random forest
-    │   ├── xgboost_model.py      # XGBoost
-    │   ├── benchmark.py          # Cross-model comparison
-    │   └── plotting.py           # Model evaluation plots
-    └── viz/
-        └── style.py              # Shared plot style (palette, rcParams)
+    │   ├── build_features.py     # Feature engineering pipeline for cars
+    │   ├── build_features_twowheeler.py # Feature engineering pipeline for two-wheelers
+    │   └── target_encoder.py     # LOO target encoder with smoothing
+    └── models/
+        ├── run_all.py            # Train & benchmark all car models
+        ├── train_twowheeler.py   # Train & benchmark all two-wheeler models
+        ├── linear_regression.py  # Ridge regression
+        ├── svr.py                # Support vector regression
+        ├── random_forest.py      # Random forest
+        ├── xgboost_model.py      # XGBoost
+        ├── lightgbm_model.py     # LightGBM
+        ├── benchmark.py          # Cross-model comparison for cars
+        └── plotting.py           # Model evaluation plots for cars
 ```
 
 ## Setup
@@ -55,8 +58,9 @@ cp .env.example .env
 
 LaTeX compilation requires a TeX distribution (e.g., [MiKTeX](https://miktex.org/) on Windows).
 
-## Pipeline
+## Pipelines
 
+### A. Electric Cars Pipeline
 Run from the project root, in order:
 
 ```bash
@@ -72,19 +76,37 @@ uv run python scripts/llm_extraction_local.py
 # 4. Feature engineering (clean → encode → split → scale)
 uv run python -m src.features.build_features
 
-# 5. Train all models and run benchmark
-uv run python -m src.models.run_all --models linear_regression svr random_forest xgboost --benchmark
+# 5. Train all car models and run benchmark
+uv run python -m src.models.run_all --models linear_regression svr random_forest xgboost lightgbm --benchmark
+```
+
+### B. Two-Wheelers (Bicycles & Motorbikes) Pipeline
+Run from the project root, in order:
+
+```bash
+# 1. Load and clean raw two-wheelers scraped JSONs
+uv run python scripts/two_wheelers_pipeline.py
+
+# 2. Merge cleaned listings with LLM-extracted features
+uv run python scripts/two_wheelers_pipeline.py --merge-only
+
+# 3. Feature engineering (ratio-to-median outlier scaling, encoding, split)
+uv run python -m src.features.build_features_twowheeler
+
+# 4. Train and benchmark all two-wheeler models
+uv run python -m src.models.train_twowheeler
 ```
 
 ## Notebooks
 
-Execute after the pipeline completes:
+Execute after the pipelines complete to pre-render output:
 
 ```bash
 uv run jupyter nbconvert --to notebook --execute --ExecutePreprocessor.timeout=300 notebooks/prep_eda.ipynb --output prep_eda.ipynb
 uv run jupyter nbconvert --to notebook --execute --ExecutePreprocessor.timeout=300 notebooks/eda.ipynb --output eda.ipynb
 uv run jupyter nbconvert --to notebook --execute --ExecutePreprocessor.timeout=300 notebooks/feature_engineering.ipynb --output feature_engineering.ipynb
 uv run jupyter nbconvert --to notebook --execute --ExecutePreprocessor.timeout=300 notebooks/project_report.ipynb --output project_report.ipynb
+uv run jupyter nbconvert --to notebook --execute --ExecutePreprocessor.timeout=300 notebooks/two_wheelers_analysis.ipynb --output two_wheelers_analysis.ipynb
 ```
 
 Or open them interactively:
@@ -93,7 +115,7 @@ Or open them interactively:
 uv run jupyter lab
 ```
 
-## Paper & Presentation
+## Paper & Presentation (Cars)
 
 After running the pipeline and notebooks, copy figures and compile:
 
@@ -127,6 +149,7 @@ pdflatex -interaction=nonstopmode presentation.tex
 
 ## Key Results
 
+### Electric Cars Benchmarking
 | Model | RMSE (M VND) | MAE (M VND) | R² |
 |---|---|---|---|
 | Ridge | 381 | 115 | 0.636 |
@@ -135,3 +158,15 @@ pdflatex -interaction=nonstopmode presentation.tex
 | XGBoost | 383 | 103 | 0.633 |
 
 Data quality fixes (chotot.com price correction, deduplication, BYD removal) reduced RMSE by **67%** (1.02B → 332M VND) — far more impactful than model selection (15% difference between best and worst).
+
+### Two-Wheelers Benchmarking
+| Model | Test RMSE (M VND) | Test MAE (M VND) | Test R² | Test MAPE (%) |
+|---|---|---|---|---|
+| Linear Regression | 6.97 | 4.50 | 0.620 | 57.47% |
+| SVR | 5.54 | 3.82 | 0.760 | 57.03% |
+| Random Forest | 5.61 | 3.93 | 0.754 | 61.00% |
+| **XGBoost** | **5.29** | **3.69** | **0.782** | **57.51%** |
+| LightGBM | 5.56 | 3.91 | 0.759 | 60.10% |
+
+For two-wheelers, **XGBoost** achieves the highest performance with a Test $R^2$ of **0.782**, closely followed by SVR and LightGBM.
+All two-wheeler evaluation plots are saved to `reports/two_wheelers/`.
