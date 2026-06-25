@@ -8,19 +8,30 @@ range_km
 power_hp
 model_mode_enc
 model_year_enc
+brand_Bestune
+brand_Geely
+brand_Mercedes Benz
 brand_Mercedes-Benz
 brand_Other
 brand_Porsche
 brand_VinFast
+brand_Vinfast
 brand_Wuling
+base_model_EC VAN
 base_model_EC Van
+base_model_EQS
 base_model_Herio Green
 base_model_Limo
 base_model_Limo Green
+base_model_LimoGreen
+base_model_MPV 7
+base_model_MPV7
 base_model_Minio Green
 base_model_Other
 base_model_Taycan
-base_model_VF MPV 7
+base_model_Unknown
+base_model_VF 5
+base_model_VF MPV
 base_model_VF e34
 base_model_VF3
 base_model_VF5
@@ -28,6 +39,8 @@ base_model_VF6
 base_model_VF7
 base_model_VF8
 base_model_VF9
+base_model_VFe34
+base_model_Xiaoma
 body_type_Coupe
 body_type_Hatchback
 body_type_MPV
@@ -36,6 +49,7 @@ body_type_SUV
 body_type_Sedan
 drivetrain_AWD
 drivetrain_FWD
+drivetrain_Other
 drivetrain_RWD
 origin_Domestic
 origin_Imported

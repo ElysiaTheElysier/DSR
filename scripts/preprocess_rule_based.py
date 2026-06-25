@@ -77,8 +77,13 @@ class DataPreprocessor:
         df = pd.read_csv(self.input_path)
         initial_len = len(df)
 
+        # Làm sạch cột Tên xe (đã có sẵn)
         logger.info("Cleaning whitespace and line breaks from 'Tên xe'...")
         df['Tên xe'] = df['Tên xe'].apply(self.clean_text_formatting)
+
+        # BỔ SUNG THÊM: Làm sạch cột Mô tả
+        logger.info("Cleaning whitespace and line breaks from 'Mô tả'...")
+        df['Mô tả'] = df['Mô tả'].apply(self.clean_text_formatting)
 
         ice_models = ['fadil', 'lux a', 'lux sa', 'president']
         ice_pattern = '|'.join(ice_models)
@@ -106,7 +111,7 @@ class DataPreprocessor:
 
 
 if __name__ == "__main__":
-    ROOT_PATH = Path.cwd().parent
+    ROOT_PATH = Path(__file__).resolve().parent.parent
     INPUT_FILE = ROOT_PATH / "data" / "interim" / "merged_raw_listings.csv"
     OUTPUT_FILE = ROOT_PATH / "data" / "interim" / "ev_cleaned_rule_based.csv"
 

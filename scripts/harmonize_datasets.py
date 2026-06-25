@@ -49,6 +49,14 @@ class DataHarmonizer:
             if col not in df.columns:
                 df[col] = np.nan
 
+        # BỔ SUNG THÊM: Loại bỏ xuống dòng, tab, khoảng trắng thừa ở các cột văn bản
+        text_cols = ["Tên xe", "Mô tả", "Địa chỉ"]
+        for col in text_cols:
+            if col in df.columns:
+                # split() tự động tách theo tất cả khoảng trắng (bao gồm cả \n, \t, \r) 
+                # sau đó join() ghép lại bằng 1 khoảng trắng duy nhất.
+                df[col] = df[col].apply(lambda x: " ".join(str(x).split()) if pd.notna(x) else x)
+
         logger.info(f"[{source_name}] Schema enforced. Output shape: {df[self.CORE_FEATURES].shape}")
         return df[self.CORE_FEATURES]
 
@@ -150,7 +158,7 @@ class DataHarmonizer:
 
         df_bonbanh = self.process_standard_csv("bonbanh.csv")
         df_vinfast = self.process_standard_csv("xevinfastluot_full.csv")
-        df_otodien = self.process_otodien("data_xe_dien_web_otodien.csv")
+        df_otodien = self.process_otodien("data_xe_dien.csv")
         df_chotot = self.process_chotot_json("chotot/cars.json")
 
         logger.info("Concatenating datasets.")
@@ -164,7 +172,7 @@ class DataHarmonizer:
 
 
 if __name__ == "__main__":
-    ROOT_PATH = Path.cwd().parent
+    ROOT_PATH = Path(__file__).resolve().parent.parent
     RAWD_PATH = ROOT_PATH / "data" / "raw"
     PROC_PATH = ROOT_PATH / "data" / "interim" / "merged_raw_listings.csv"
 

@@ -76,6 +76,9 @@ def load_and_clean(path: Path) -> pd.DataFrame:
 
 def impute_missing(df: pd.DataFrame) -> pd.DataFrame:
     """Impute missing values."""
+    # Base model: fill NaN with "Unknown" to prevent stratification errors
+    df["base_model"] = df["base_model"].fillna("Unknown")
+
     # Brand: lookup from base_model
     if df["brand"].isna().any():
         brand_lookup = df.dropna(subset=["brand"]).groupby("base_model")["brand"].first().to_dict()

@@ -41,14 +41,14 @@ LLM-assisted feature extraction approach using local (Qwen~2.5 3B) and
 cloud-based (GPT-5-nano) models to parse unstructured Vietnamese car listings
 into structured features. Through systematic data quality analysis, we
 identify and correct three critical issues---a 10$\times$ price inflation
-affecting 41\% of records, systematic brand-level pricing errors, and 54.4\%
+affecting 40\% of records, systematic brand-level pricing errors, and 22.2\%
 duplicate contamination causing test--train leakage---reducing RMSE from
 1.02~billion~VND (artificially deflated by leakage) to 332~million~VND
 (honest evaluation). We benchmark four regression models (Ridge, SVR, Random
 Forest, XGBoost) across price segments and find that Random Forest achieves
 the best overall performance ($R^2 = 0.725$, RMSE~$= 332$M~VND), with
-practical accuracy for budget and mid-range segments comprising 56\% of the
-market. Our analysis highlights that data quality remediation contributes
+practical accuracy for budget and mid-range segments comprising 92\% of
+our test records. Our analysis highlights that data quality remediation contributes
 more to prediction accuracy than model selection in this domain.
 \end{abstract}
 
@@ -99,7 +99,7 @@ This paper makes four contributions:
     correcting these issues reduces RMSE by 67\%, from 1.02B to 332M~VND.
     \item We provide segment-specific evaluation showing that the model
     achieves practical accuracy (RMSE $< 100$M~VND) for budget and mid-range
-    segments, which constitute 56\% of the Vietnamese EV market.
+    segments, which comprise 92\% of our test records.
 \end{enumerate}
 
 % ============================================================================
@@ -152,10 +152,10 @@ summarizes the source characteristics.
 \toprule
 \textbf{Website} & \textbf{Method} & \textbf{Coverage} & \textbf{Records} \\
 \midrule
-bonbanh.com & BeautifulSoup & Multi-brand & 1,502 \\
-chotot.com & Scrapy & Multi-brand & 1,727 \\
-xevinfastluot.com & Selenium & VinFast only & 208 \\
-otodien.vn & BeautifulSoup & Multi-brand & 729 \\
+bonbanh.com & BeautifulSoup & Multi-brand & 1,493 \\
+chotot.com & Scrapy & Multi-brand & 1,666 \\
+xevinfastluot.com & Selenium & VinFast only & 279 \\
+otodien.vn & BeautifulSoup & Multi-brand & 728 \\
 \midrule
 \multicolumn{3}{l}{\textbf{Total (merged)}} & \textbf{4,166} \\
 \bottomrule
@@ -220,17 +220,23 @@ occasionally hallucinated non-existent trim names for non-VinFast brands.
 % ============================================================================
 \section{Data Quality Analysis}
 
-Systematic analysis of the merged dataset revealed three critical data
-quality issues, each with significant impact on model performance.
+Prior to the quality analysis described in this section, a rule-based
+preprocessing step (\texttt{preprocess\_rule\_based.py}) reduced the 4,166
+merged records to 3,992 by removing non-EV (ICE) listings, records with
+missing or structurally invalid prices, and malformed entries. The remaining
+3,992 records then underwent systematic data quality analysis, which
+revealed three critical issues.
+
+
 
 \subsection{chotot.com 10$\times$ Price Inflation}
 Cross-source price comparison revealed that listings from chotot.com
 exhibited prices approximately 10$\times$ higher than equivalent listings on
 other platforms. For example, a VinFast VF5 Plus 2024 was listed at
 3.99B~VND on chotot.com versus 399M~VND on bonbanh.com. This affected
-1,727 records (41.4\% of the dataset) and was traced to a unit mismatch in
-the LLM extraction pipeline where prices in thousands of VND were
-interpreted as raw VND values.
+1,666 records (40.0\% of the merged dataset) and was traced to
+chotot.com storing listing prices in units of 1{,}000~VND, which were
+ingested as raw VND values during scraping and harmonization.
 
 The correction was straightforward: dividing all chotot.com prices by 10.
 Fig.~\ref{fig:chotot_price} illustrates the price discrepancy before
@@ -245,13 +251,15 @@ vehicle models, showing systematic 10$\times$ inflation.}
 \end{figure*}
 
 \subsection{BYD Systematic Pricing Error}
-All 74 BYD-brand records (2.3\% of the dataset) exhibited prices
+All 90 BYD-brand records (2.3\% of the dataset) exhibited prices
 approximately 10$\times$ higher than actual market values. Unlike the
 chotot.com issue, this error was brand-specific and appeared across all
 sources. Because every BYD record was affected, no within-brand correction
-was possible. Despite representing only 2.3\% of records, BYD contributed
-14.5\% of total prediction error (MAE of 1.735B~VND vs.\ 433M~VND for
-non-BYD records). We removed all BYD records from the training dataset.
+was possible. Despite representing only 2.3\% of records, a simulation shows BYD would
+account for approximately 56\% of total weighted prediction error if
+retained---with a per-record MAE of 4.914B~VND versus 89.5M~VND for
+non-BYD records under the best-performing model. We removed all BYD records
+from the training dataset.
 
 Fig.~\ref{fig:byd_removal} shows the price distribution comparison between
 BYD and non-BYD records.
@@ -266,7 +274,7 @@ non-BYD brands.}
 
 \subsection{Duplicate Contamination and Test--Train Leakage}
 Deduplication analysis on the key tuple (brand, base\_model, model\_mode,
-year, price\_vnd, condition, mileage\_km) revealed that 883 records (22.2\%
+year, price\_vnd, condition, mileage\_km) revealed that 887 records (22.2\%
 after price correction) were exact duplicates. The most extreme case---a
 VinFast VF9 2025 at 12.29B~VND---appeared 23 times.
 
@@ -305,9 +313,9 @@ data quality fix.
 \toprule
 \textbf{Stage} & \textbf{Records} & \textbf{Best RMSE} \\
 \midrule
-Raw (with all issues) & 3,963 & 1.02B VND \\
-+ chotot.com price fix & 3,963 & -- \\
-+ Deduplication & 3,089 & -- \\
+Raw (with all issues) & 3,992 & 1.02B VND \\
++ chotot.com price fix & 3,992 & -- \\
++ Deduplication & 3,105 & -- \\
 + BYD removal & 3,015 & 332M VND \\
 \bottomrule
 \end{tabular}
@@ -349,7 +357,7 @@ Three numeric features were derived:
 \subsection{EV Specifications Recovery}
 One of the most impactful feature engineering steps was recovering
 EV-specific technical specifications. The otodien.vn source dataset contained
-battery capacity (kWh), driving range (km), and motor power (hp) for 729
+battery capacity (kWh), driving range (km), and motor power (hp) for 728
 records with 99.6\% fill rate. We constructed a lookup table mapping each
 base\_model to its median battery\_kwh, range\_km, and power\_hp, yielding
 specifications for 29 distinct EV models. This lookup was then joined to all
@@ -381,7 +389,7 @@ Our solution:
 \begin{itemize}
     \item \textbf{Target encoding} (leave-one-out with Bayesian smoothing,
     $m=10$) for high-cardinality features only: \texttt{model\_mode} (324
-    unique values, $r = 0.76$ with price) and \texttt{model\_year}
+    unique values, Pearson $r = 0.76$ between its encoded values and price) and \texttt{model\_year}
     (interaction of base\_model and year).
     \item \textbf{One-hot encoding} for low-cardinality features: brand
     ($\leq 8$), base\_model ($\sim$15), body\_type (5), drivetrain (3),
@@ -468,8 +476,8 @@ We benchmarked four regression models representing different paradigms:
 \end{itemize}
 
 Ridge and SVR use log-transformed targets and standardized features to
-handle the heavy right-skew of Vietnamese EV prices (skewness = 2.50 for
-raw prices, 0.95 for log-transformed). Tree-based models operate on raw
+handle the heavy right-skew of Vietnamese EV prices (skewness = 5.03 for
+raw prices, 0.22 for log-transformed). Tree-based models operate on raw
 prices and unscaled features, leveraging their inherent invariance to
 monotonic transformations.
 
@@ -569,7 +577,7 @@ Luxury ($> 5$B) & 2 & 4,041 & 3,275 \\
 
 The budget and mid-range segments---comprising 92\% of test records (555 of
 603)---achieve RMSE of 100M and 81M~VND respectively, representing
-prediction errors of approximately 20\% and 10\% of median segment price.
+prediction errors of approximately 34\% and 11\% of median segment price.
 These error levels are practical for price estimation on the scraped
 websites. The premium segment (RMSE = 797M) and luxury segment (RMSE = 4B,
 $n = 2$) remain impractical due to sparse data and high price variance.

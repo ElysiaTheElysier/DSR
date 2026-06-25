@@ -15,6 +15,7 @@ from . import linear_regression  # noqa: F401
 from . import svr as svr_module  # noqa: F401
 from . import random_forest  # noqa: F401
 from . import xgboost_model  # noqa: F401
+from . import lightgbm_model  # noqa: F401
 
 from .config import MODEL_REGISTRY
 from .benchmark import run_benchmark

@@ -12,7 +12,7 @@ import pandas as pd
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-RAW_OTODIEN = ROOT / "data" / "raw" / "data_xe_dien_web_otodien.csv"
+RAW_OTODIEN = ROOT / "data" / "raw" / "data_xe_dien.csv"
 OUTPUT = ROOT / "data" / "interim" / "ev_specs_lookup.csv"
 
 

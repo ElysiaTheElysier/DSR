@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 import openai
 from openai import AsyncOpenAI
 from loguru import logger
-from tqdm.asyncio import tqdm
+from tqdm import tqdm
 from pathlib import Path
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 from dotenv import load_dotenv
@@ -63,15 +63,15 @@ class EVExtractionPipeline:
         self.input_file = input_file
         self.output_file = output_file
         self.batch_size = batch_size
-        self.client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+        self.client = None
 
         self.start_time = 0
         self.total_cost = 0.0
         self.input_tokens = 0
         self.output_tokens = 0
 
-        self.semaphore = asyncio.Semaphore(3)
-        self.file_lock = asyncio.Lock()
+        self.semaphore = None
+        self.file_lock = None
 
         logger.remove()
         logger.add("logs/extraction.log", rotation="50 MB")
@@ -135,9 +135,11 @@ class EVExtractionPipeline:
                 pbar.update(len(batch_df))
 
     async def run(self) -> None:
+        self.client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+        self.semaphore = asyncio.Semaphore(3)
+        self.file_lock = asyncio.Lock()
         self.start_time = time.time()
-        self.output_file.parent.mkdir(parents=True, exist_ok=True)
-
+        
         df = pd.read_csv(self.input_file)
 
         if self.output_file.exists():
@@ -167,9 +169,9 @@ class EVExtractionPipeline:
 
 
 if __name__ == "__main__":
-    import nest_asyncio
+    # import nest_asyncio
 
-    nest_asyncio.apply()
+    # nest_asyncio.apply()
     ROOT = Path(__file__).parent.parent
     INPUT = ROOT / "data" / "interim" / "ev_cleaned_rule_based.csv"
     OUTPUT = ROOT / "data" / "interim" / "ev_extracted_gpt5nano.csv"
