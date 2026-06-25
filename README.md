@@ -121,21 +121,21 @@ After running the pipeline and notebooks, copy figures and compile:
 
 ```cmd
 :: Copy figures to paper directory
-copy reports\project_report\before_after_comparison.pdf docs\research\figures\
-copy reports\project_report\chotot_price_comparison.pdf docs\research\figures\
-copy reports\project_report\model_r2_comparison.pdf docs\research\figures\
-copy reports\project_report\model_rmse_comparison.pdf docs\research\figures\
-copy reports\project_report\records_per_source.pdf docs\research\figures\
-copy reports\project_report\segment_rmse.pdf docs\research\figures\
-copy reports\feature_engineering\byd_removal.pdf docs\research\figures\
-copy reports\feature_engineering\dedup_analysis.pdf docs\research\figures\
-copy reports\feature_engineering\encoding_comparison.pdf docs\research\figures\
-copy reports\feature_engineering\ev_specs_coverage.pdf docs\research\figures\
-copy reports\feature_engineering\feature_correlation_matrix.pdf docs\research\figures\
-copy reports\feature_engineering\feature_importance_summary.pdf docs\research\figures\
-copy reports\model_benchmark\random_forest_actual_vs_predicted.pdf docs\research\figures\
-copy reports\model_benchmark\random_forest_feature_importance.pdf docs\research\figures\
-copy reports\model_benchmark\random_forest_residual_distribution.pdf docs\research\figures\
+copy reports\project_report\before_after_comparison.png docs\research\figures\
+copy reports\project_report\chotot_price_comparison.png docs\research\figures\
+copy reports\project_report\model_r2_comparison.png docs\research\figures\
+copy reports\project_report\model_rmse_comparison.png docs\research\figures\
+copy reports\project_report\records_per_source.png docs\research\figures\
+copy reports\project_report\segment_rmse.png docs\research\figures\
+copy reports\feature_engineering\byd_removal.png docs\research\figures\
+copy reports\feature_engineering\dedup_analysis.png docs\research\figures\
+copy reports\feature_engineering\encoding_comparison.png docs\research\figures\
+copy reports\feature_engineering\ev_specs_coverage.png docs\research\figures\
+copy reports\feature_engineering\feature_correlation_matrix.png docs\research\figures\
+copy reports\feature_engineering\feature_importance_summary.png docs\research\figures\
+copy reports\model_benchmark\random_forest_actual_vs_predicted.png docs\research\figures\
+copy reports\model_benchmark\random_forest_feature_importance.png docs\research\figures\
+copy reports\model_benchmark\random_forest_residual_distribution.png docs\research\figures\
 
 :: Compile paper (run twice for cross-references)
 cd docs\research
