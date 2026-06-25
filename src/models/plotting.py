@@ -1,7 +1,7 @@
 """
 Plot generation for model evaluation.
 
-All plots are LaTeX-safe (no Vietnamese Unicode) and saved as PDF.
+All plots are LaTeX-safe (no Vietnamese Unicode) and saved as PNG.
 """
 
 from pathlib import Path
@@ -32,7 +32,7 @@ plt.rcParams.update({
 def _save(fig: plt.Figure, name: str, model_name: str, output_dir: Path | None = None):
     out = output_dir or BENCHMARK_DIR
     out.mkdir(parents=True, exist_ok=True)
-    path = out / f"{model_name}_{name}.pdf"
+    path = out / f"{model_name}_{name}.png"
     fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
     print(f"  Plot saved -> {path}")

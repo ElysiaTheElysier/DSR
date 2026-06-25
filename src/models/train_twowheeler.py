@@ -161,7 +161,7 @@ def train_and_evaluate():
     ax.set_title(f"Actual vs Predicted ({best_name})")
     ax.legend()
     fig.tight_layout()
-    fig.savefig(REPORTS / "actual_vs_predicted.pdf")
+    fig.savefig(REPORTS / "actual_vs_predicted.png")
     plt.close(fig)
     
     # Plot 2: Residuals Distribution
@@ -173,7 +173,7 @@ def train_and_evaluate():
     ax.set_ylabel("Count")
     ax.set_title(f"Residual Distribution ({best_name})")
     fig.tight_layout()
-    fig.savefig(REPORTS / "residual_distribution.pdf")
+    fig.savefig(REPORTS / "residual_distribution.png")
     plt.close(fig)
     
     # Plot 3: Feature Importance (for Random Forest / XGBoost / LightGBM)
@@ -195,7 +195,7 @@ def train_and_evaluate():
         sns.barplot(data=imp_df, x="Importance", y="Feature", palette="Blues_d", ax=ax)
         ax.set_title(f"Top 15 Feature Importances ({tree_name})")
         fig.tight_layout()
-        fig.savefig(REPORTS / "feature_importance.pdf")
+        fig.savefig(REPORTS / "feature_importance.png")
         plt.close(fig)
         logger("Các biểu đồ đánh giá đã được lưu vào thư mục reports/two_wheelers/")
         

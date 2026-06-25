@@ -150,7 +150,7 @@ def comparison_bar_chart(
     fig.suptitle(r"\textbf{Model Comparison}", fontsize=14, y=1.02)
     fig.tight_layout()
 
-    path = out / "model_comparison.pdf"
+    path = out / "model_comparison.png"
     fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
     print(f"Comparison chart saved -> {path}")
