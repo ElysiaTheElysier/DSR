@@ -6,12 +6,19 @@ Saves metrics and evaluation charts to reports/two_wheelers/.
 
 import os
 from pathlib import Path
+import sys
 import numpy as np
 import pandas as pd
 import matplotlib
-matplotlib.use("Agg")
+# Set Agg backend only if not running inside an interactive Jupyter notebook
+if 'ipykernel' not in sys.modules:
+    matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+# Reconfigure stdout to support UTF-8 characters
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
 
 from sklearn.linear_model import LinearRegression
 from sklearn.svm import SVR
@@ -68,10 +75,18 @@ def train_and_evaluate():
     # Models to train
     models = {
         "Linear Regression": (LinearRegression(), True),  # uses scaled data
-        "SVR": (SVR(C=10.0, epsilon=0.1), True),          # uses scaled data
-        "Random Forest": (RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1), False), # unscaled
-        "XGBoost": (XGBRegressor(n_estimators=100, learning_rate=0.08, random_state=42, n_jobs=-1), False), # unscaled
-        "LightGBM": (LGBMRegressor(n_estimators=100, learning_rate=0.08, random_state=42, n_jobs=-1, verbose=-1), False) # unscaled
+        "SVR": (SVR(C=1.0, epsilon=0.2), True),          # uses scaled data
+        "Random Forest": (RandomForestRegressor(
+            n_estimators=150, max_depth=12, min_samples_leaf=2, max_features=0.8, random_state=42, n_jobs=-1
+        ), False), # unscaled
+        "XGBoost": (XGBRegressor(
+            n_estimators=150, max_depth=5, learning_rate=0.08, subsample=0.7, colsample_bytree=0.7,
+            reg_alpha=1.0, reg_lambda=1.0, random_state=42, n_jobs=-1
+        ), False), # unscaled
+        "LightGBM": (LGBMRegressor(
+            n_estimators=150, max_depth=5, learning_rate=0.08, num_leaves=31, min_child_samples=15,
+            subsample=0.7, colsample_bytree=0.8, reg_alpha=1.0, reg_lambda=1.0, random_state=42, n_jobs=-1, verbose=-1
+        ), False) # unscaled
     }
     
     results = []

@@ -83,6 +83,78 @@ def main():
     # Drop rows without price
     df = df.dropna(subset=["price_vnd"])
     
+    # Scale prices under 100,000 (which are in Millions, e.g. 24.5 -> 24,500,000.0)
+    million_mask = df["price_vnd"] < 100_000
+    n_million = million_mask.sum()
+    if n_million > 0:
+        df.loc[million_mask, "price_vnd"] = df.loc[million_mask, "price_vnd"] * 1_000_000
+        logger.info(f"Scaled {n_million} prices from Millions to raw VND")
+
+    # Compute baseline medians for models using valid prices (1M to 80M)
+    valid_mask = (df["price_vnd"] >= 1_000_000) & (df["price_vnd"] < 80_000_000)
+    model_medians = df[valid_mask].groupby("model")["price_vnd"].median().to_dict()
+    brand_medians = df[valid_mask].groupby("brand")["price_vnd"].median().to_dict()
+    overall_median = df[valid_mask]["price_vnd"].median() if valid_mask.any() else 15_000_000.0
+
+    # Scale both low-priced outliers (< 1M) and high-priced outliers (>= 80M) using ratio-to-median
+    n_scaled_low = 0
+    n_scaled_high = 0
+
+    for idx in df.index:
+        p = df.loc[idx, "price_vnd"]
+        model = df.loc[idx, "model"]
+        brand = df.loc[idx, "brand"]
+        
+        ref = model_medians.get(model, brand_medians.get(brand, overall_median))
+        if pd.isna(ref) or ref == 0:
+            ref = overall_median
+            
+        ratio = p / ref
+        
+        # Low price outliers (between 10k and 1M VND)
+        if p < 1_000_000:
+            if 0.07 <= ratio <= 0.13:
+                df.loc[idx, "price_vnd"] = p * 10
+                n_scaled_low += 1
+            elif 0.007 <= ratio <= 0.013:
+                df.loc[idx, "price_vnd"] = p * 100
+                n_scaled_low += 1
+                
+        # High price outliers (>= 80M VND)
+        elif p >= 80_000_000:
+            if 7.0 <= ratio <= 13.0:
+                df.loc[idx, "price_vnd"] = p / 10
+                n_scaled_high += 1
+            elif 70.0 <= ratio <= 130.0:
+                df.loc[idx, "price_vnd"] = p / 100
+                n_scaled_high += 1
+
+    if n_scaled_low > 0:
+        logger.info(f"Rescaled {n_scaled_low} low-priced two-wheelers (< 1M) using ratio-to-median")
+    if n_scaled_high > 0:
+        logger.info(f"Rescaled {n_scaled_high} high-priced two-wheelers (>= 80M) using ratio-to-median")
+
+    # Filter price outliers (keep only prices between 1M and 80M VND)
+    initial_len = len(df)
+    df = df[(df["price_vnd"] >= 1_000_000) & (df["price_vnd"] <= 80_000_000)]
+    price_filtered = initial_len - len(df)
+    if price_filtered > 0:
+        logger.info(f"Filtered out {price_filtered} price outliers (price < 1M or > 80M). Remaining: {len(df)}")
+        
+    # Handle invalid years (year < 2010 is treated as NaN to be imputed by median)
+    invalid_years = (df["year"] < 2010) & (df["year"].notna())
+    num_invalid_years = invalid_years.sum()
+    if num_invalid_years > 0:
+        logger.info(f"Treating {num_invalid_years} invalid years (< 2010) as NaN")
+        df.loc[invalid_years, "year"] = np.nan
+        
+    # Handle extreme mileages (clip/cap mileage at 100,000 km)
+    extreme_mileage = df["mileage_km"] > 100_000
+    num_extreme_mileage = extreme_mileage.sum()
+    if num_extreme_mileage > 0:
+        logger.info(f"Capping {num_extreme_mileage} extreme mileages (> 100,000 km) at 100,000 km")
+        df.loc[extreme_mileage, "mileage_km"] = 100_000.0
+    
     # Drop non-feature columns
     drop_cols = ["link", "post_date", "seller_name", "title", "description", "origin"]
     df = df.drop(columns=[c for c in drop_cols if c in df.columns])
