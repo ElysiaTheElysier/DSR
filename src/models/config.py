@@ -39,14 +39,15 @@ PARAM_GRIDS = {
         "subsample": [0.7, 0.8, 0.9],               # Tinh chỉnh quanh mức 0.8
         "colsample_bytree": [0.7, 0.8, 0.9],        # Tinh chỉnh quanh mức 0.8
     },
-    "lightgbm": {
-        "n_estimators": [300, 500],                 # Mở rộng số lượng cây vì trước đó chọn 300 cây
-        "max_depth": [6, 8, -1],
-        "num_leaves": [31, 63, 127],                # Tăng số lượng lá tối đa vì trước đó chọn 63 lá
-        "learning_rate": [0.05, 0.1, 0.15],         # Tập trung xung quanh mức 0.1 tốt nhất
-        "subsample": [0.7, 0.8, 0.9],               # Tinh chỉnh quanh mức 0.8
-        "colsample_bytree": [0.7, 0.8, 0.9],        # Tinh chỉnh quanh mức 0.8
-    },
+    # "lightgbm" disabled per user request
+    # "lightgbm": {
+    #     "n_estimators": [300, 500],
+    #     "max_depth": [6, 8, -1],
+    #     "num_leaves": [31, 63, 127],
+    #     "learning_rate": [0.05, 0.1, 0.15],
+    #     "subsample": [0.7, 0.8, 0.9],
+    #     "colsample_bytree": [0.7, 0.8, 0.9],
+    # },
 }
 
 # ── Model registry (populated lazily to avoid circular imports) ──────────────

@@ -36,6 +36,84 @@ DRIVETRAIN_MAP = {
     "RWD - Dẫn động cầu sau": "RWD",
 }
 
+# ── Brand normalization ──────────────────────────────────────────────────────
+BRAND_NORMALIZE = {
+    "Vinfast": "VinFast",
+    "Vinfat": "VinFast",
+    "LIMO": "VinFast",
+    "Limo Green": "VinFast",
+    "Mercedes Benz": "Mercedes-Benz",
+    "Mercedes": "Mercedes-Benz",
+    "Herio": "VinFast",
+    "HERIO GREEN": "VinFast",
+    "Ecvan": "VinFast",
+    "NERIO": "VinFast",
+    "EC": "VinFast",
+    "Kim Long": "Other",
+    "Kim Long Motor": "Other",
+    "/null": "Unknown",
+    ":null,": "Unknown",
+    "": "Unknown",
+}
+
+# ── Base model normalization ─────────────────────────────────────────────────
+BASE_MODEL_NORMALIZE = {
+    # VFe34 variants → VF e34
+    "VFe34": "VF e34", "VFe34 2022": "VF e34", "VFe34 2023": "VF e34",
+    "VFE34 22": "VF e34", "VFe34 23": "VF e34",
+    "E34": "VF e34", "e34 AT": "VF e34", "e34 Plus": "VF e34",
+    "E34 xanh": "VF e34",
+    # VF spacing variants
+    "VF 5": "VF5", "VF 3": "VF3", "VF 6": "VF6",
+    "VF 7": "VF7", "VF 8": "VF8", "VF 9": "VF9",
+    "VF 8S": "VF8",
+    # MPV variants → MPV 7
+    "MPV7": "MPV 7", "MVP7": "MPV 7", "MVP 7": "MPV 7",
+    "VF MPV": "MPV 7", "VF MPV7": "MPV 7", "VFM PV": "MPV 7",
+    "PV7": "MPV 7", "MPV7 BẢN": "MPV 7", "Limo/MPV7 7": "MPV 7",
+    # Limo Green variants
+    "LimoGreen": "Limo Green", "Limogreen": "Limo Green",
+    "LIMO GREEM": "Limo Green", "VF Limogreen": "Limo Green",
+    "Limogreen 2026": "Limo Green", "VF limo": "Limo Green",
+    "Limo 7": "Limo Green",
+    # Limo standalone → Limo Green (same VinFast product line)
+    "Limo": "Limo Green",
+    # EC Van variants
+    "ECVAN": "EC Van", "ECVAN Nâng": "EC Van",
+    "VAN ĐIỆN": "EC Van", "Van": "EC Van",
+    # Minio Green variants
+    "MinioGreen": "Minio Green", "Minio": "Minio Green",
+    # Herio / Nerio variants
+    "NERIO Green": "Herio Green", "Nerio": "Herio Green",
+    "Herio": "Herio Green",
+    # Green standalone
+    "Green": "Herio Green", "Green Xanh": "Herio Green",
+    "GREEN 2026": "Herio Green",
+    # BYD variants
+    "Atto3 2025": "Atto 3", "Atto 2": "Atto 3",
+    "Bingo Base": "Bingo", "Bingo 333km": "Bingo", "Bingo 333": "Bingo",
+    "Bingo 410km": "Bingo", "BINGO Max": "Bingo", "Bingo 2026": "Bingo",
+    "Bongo": "Bingo",
+    # Wuling
+    "Mini EV": "Xiaoma", "Hongguang Mini": "Xiaoma",
+    "HongGuang MiniEV": "Xiaoma", "Mini 170Km": "Xiaoma",
+    "MiniEV Macaron": "Xiaoma", "MACARON": "Xiaoma", "EV 170": "Xiaoma",
+    # Volvo
+    "EC40 Ultra": "EC40", "EC40 Recharge": "EC40",
+    # Hongqi
+    "E-HS9 Premium": "E-HS9", "7X-E Premium": "E-HS9",
+    # Geely
+    "EX5 Max": "EX5", "EX5 Pro": "EX5", "EX5 EM": "EX5",
+    "Ex5": "EX5", "EX2 MAX": "EX2",
+    # Bestune
+    "M9 Premium": "M9", "M9 MPV": "M9", "M9 Advance": "M9",
+    "M9 Advanced": "M9",
+    # Noise entries → Unknown
+    ".": "Unknown", "/null": "Unknown", ":": "Unknown",
+    "": "Unknown", "All model": "Unknown", "Full Option": "Unknown",
+    "Ô tô": "Unknown",
+}
+
 
 def load_and_clean(path: Path) -> pd.DataFrame:
     """Load EDA-ready data, apply Phase 1 cleaning."""
@@ -47,6 +125,13 @@ def load_and_clean(path: Path) -> pd.DataFrame:
     df = df.dropna(subset=["price_vnd"])
     print(f"  After dropping null prices: {len(df):,}")
 
+    # Scale prices under 100,000 (which are in Millions, e.g. 785.0 -> 785,000,000.0)
+    million_mask = df["price_vnd"] < 100_000
+    n_million = million_mask.sum()
+    if n_million > 0:
+        df.loc[million_mask, "price_vnd"] = df.loc[million_mask, "price_vnd"] * 1_000_000
+        print(f"  Scaled {n_million} prices from Millions to raw VND")
+
     # Fix chotot.com systematic 10x price inflation
     # chotot.com prices are consistently ~10x higher than other websites
     # (likely a unit mismatch in scraping/LLM extraction pipeline)
@@ -55,6 +140,21 @@ def load_and_clean(path: Path) -> pd.DataFrame:
         n_chotot = chotot_mask.sum()
         df.loc[chotot_mask, "price_vnd"] = df.loc[chotot_mask, "price_vnd"] / 10
         print(f"  Fixed chotot.com prices (/10): {n_chotot:,} records")
+
+    # Filter out price outliers (< 150M VND or > 3B VND)
+    n_before_filter = len(df)
+    df = df[(df["price_vnd"] >= 150_000_000) & (df["price_vnd"] <= 3_000_000_000)]
+    print(f"  Filtered out {n_before_filter - len(df):,} price outliers (price < 150M or > 3B). Remaining: {len(df):,}")
+
+    # ── Normalize brand names BEFORE dedup ────────────────────────────────
+    df["brand"] = df["brand"].fillna("").astype(str).str.strip()
+    df["brand"] = df["brand"].replace(BRAND_NORMALIZE)
+    print(f"  Brand normalization applied ({len(BRAND_NORMALIZE)} mappings)")
+
+    # ── Normalize base_model names BEFORE dedup ───────────────────────────
+    df["base_model"] = df["base_model"].fillna("").astype(str).str.strip()
+    df["base_model"] = df["base_model"].replace(BASE_MODEL_NORMALIZE)
+    print(f"  Base model normalization applied ({len(BASE_MODEL_NORMALIZE)} mappings)")
 
     # Phase 1a: Deduplicate
     dedup_cols = ["brand", "base_model", "model_mode", "year", "price_vnd", "condition", "mileage_km"]
@@ -77,13 +177,19 @@ def load_and_clean(path: Path) -> pd.DataFrame:
 def impute_missing(df: pd.DataFrame) -> pd.DataFrame:
     """Impute missing values."""
     # Base model: fill NaN with "Unknown" to prevent stratification errors
-    df["base_model"] = df["base_model"].fillna("Unknown")
+    df["base_model"] = df["base_model"].replace({"": "Unknown"}).fillna("Unknown")
 
     # Brand: lookup from base_model
-    if df["brand"].isna().any():
-        brand_lookup = df.dropna(subset=["brand"]).groupby("base_model")["brand"].first().to_dict()
-        df["brand"] = df["brand"].fillna(df["base_model"].map(brand_lookup))
-        df["brand"] = df["brand"].fillna("Unknown")
+    if df["brand"].isna().any() or (df["brand"] == "Unknown").any():
+        brand_lookup = (
+            df[~df["brand"].isin(["Unknown", ""])]
+            .groupby("base_model")["brand"]
+            .first()
+            .to_dict()
+        )
+        unknown_mask = df["brand"].isin(["Unknown", ""]) | df["brand"].isna()
+        df.loc[unknown_mask, "brand"] = df.loc[unknown_mask, "base_model"].map(brand_lookup)
+        df["brand"] = df["brand"].fillna("Other")
 
     # Year: median per base_model
     if df["year"].isna().any():
@@ -108,7 +214,15 @@ def impute_missing(df: pd.DataFrame) -> pd.DataFrame:
     df.loc[df["mileage_km"] > 300_000, "mileage_km"] = np.nan
     df["mileage_km"] = df["mileage_km"].fillna(df["mileage_km"].median())
 
-    # Exterior color: Vietnamese → English
+    # Seats: impute missing with median per base_model, then global median
+    if "seats" in df.columns:
+        if df["seats"].isna().any():
+            seats_median = df.groupby("base_model")["seats"].transform("median")
+            df["seats"] = df["seats"].fillna(seats_median).fillna(df["seats"].median())
+        # Clip unrealistic values
+        df["seats"] = df["seats"].clip(2, 9)
+
+    # Exterior color: Vietnamese → English, then GROUP into 4 categories
     COLOR_MAP = {
         "Trắng": "White", "Đỏ": "Red", "Đen": "Black", "Xám": "Gray",
         "Xanh": "Blue", "Xanh lá": "Green", "Xanh dương": "Blue",
@@ -116,6 +230,16 @@ def impute_missing(df: pd.DataFrame) -> pd.DataFrame:
         "Cam": "Orange", "Tím": "Purple", "Be": "Beige",
     }
     df["exterior_color"] = df["exterior_color"].map(COLOR_MAP).fillna("Other")
+
+    # Group colors into 4 categories to reduce sparsity (was 11 one-hot columns)
+    COLOR_GROUP = {
+        "White": "Neutral", "Silver": "Neutral", "Beige": "Neutral",
+        "Black": "Dark", "Gray": "Dark", "Brown": "Dark",
+        "Red": "Vibrant", "Blue": "Vibrant", "Green": "Vibrant",
+        "Yellow": "Vibrant", "Orange": "Vibrant", "Pink": "Vibrant",
+        "Purple": "Vibrant",
+    }
+    df["color_group"] = df["exterior_color"].map(COLOR_GROUP).fillna("Other")
 
     # Drivetrain: Vietnamese → English
     df["drivetrain"] = df["drivetrain"].map(DRIVETRAIN_MAP).fillna("Other")
@@ -143,20 +267,42 @@ def engineer_features(
         ev_specs: pd.DataFrame,
 ) -> pd.DataFrame:
     """Create derived features."""
-    # Numeric features
+    # ── Core numeric features ────────────────────────────────────────────
     df["car_age"] = 2026 - df["year"]
     df["is_new"] = (df["condition"] == "New").astype(int)
     df["log_mileage"] = np.log1p(df["mileage_km"])
-    df["has_aftermarket_mods"] = df["has_aftermarket_mods"].astype(int)
 
-    # Join EV specs lookup
+    # ── Join EV specs lookup ─────────────────────────────────────────────
     df = df.merge(ev_specs, on="base_model", how="left")
     for col in ["battery_kwh", "range_km", "power_hp"]:
         if col in df.columns:
             df[col] = df[col].fillna(df[col].median())
 
-    # Interaction features
-    df["brand_body"] = df["brand"] + "_" + df["body_type"]
+    # ── NEW: Interaction features ────────────────────────────────────────
+
+    # Depreciation interaction: mileage × age
+    df["mileage_x_age"] = df["log_mileage"] * df["car_age"]
+
+    # EV value ratios
+    df["range_per_kwh"] = df["range_km"] / df["battery_kwh"].clip(lower=1)
+    df["hp_per_kwh"] = df["power_hp"] / df["battery_kwh"].clip(lower=1)
+
+    # Luxury brand indicator
+    df["is_luxury_brand"] = df["brand"].isin(
+        ["Porsche", "Mercedes-Benz", "BMW", "Audi", "Volvo", "Lexus", "Jaguar"]
+    ).astype(int)
+
+    # Battery size tier (ordinal: 0=small, 1=medium, 2=large)
+    try:
+        df["battery_tier"] = pd.qcut(
+            df["battery_kwh"], q=3, labels=[0, 1, 2], duplicates="drop"
+        ).astype(float).fillna(1).astype(int)
+    except ValueError:
+        # Fallback if too few unique values for qcut
+        df["battery_tier"] = 1
+
+    # ── Categorical interaction (for target encoding) ────────────────────
+    df["brand_body"] = df["brand"] + "_" + df["body_type"].fillna("Other")
     df["model_year"] = df["base_model"] + "_" + df["year"].astype(int).astype(str)
 
     return df
@@ -169,11 +315,11 @@ def encode_features(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Encode categorical features.
-    - High-cardinality (model_mode, model_year): target encoding
-    - Low-cardinality (brand, base_model, body_type, etc.): one-hot
+    - High-cardinality: target encoding (model_mode, model_year, base_model, brand_body)
+    - Low-cardinality: one-hot (brand, body_type, drivetrain, origin, city, color_group)
     """
     # --- Target encode high-cardinality ---
-    target_enc_cols = ["model_mode", "model_year"]
+    target_enc_cols = ["model_mode", "model_year", "base_model", "brand_body"]
     for col in target_enc_cols:
         if col not in train.columns:
             continue
@@ -184,7 +330,9 @@ def encode_features(
         test = test.drop(columns=[col])
 
     # --- One-hot encode low-cardinality ---
-    onehot_cols = ["brand", "base_model", "body_type", "drivetrain", "origin"]
+    # Reduced set: brand, body_type, drivetrain, origin, city, color_group
+    # (was: brand, base_model, body_type, drivetrain, origin, city, exterior_color)
+    onehot_cols = ["brand", "body_type", "drivetrain", "origin", "city", "color_group"]
     # Group rare categories first
     for col in onehot_cols:
         if col not in train.columns:
@@ -197,8 +345,8 @@ def encode_features(
         known_cats = set(train[col].unique())
         test[col] = test[col].where(test[col].isin(known_cats), "Other")
 
-    train = pd.get_dummies(train, columns=onehot_cols, drop_first=False, dtype=int)
-    test = pd.get_dummies(test, columns=onehot_cols, drop_first=False, dtype=int)
+    train = pd.get_dummies(train, columns=onehot_cols, drop_first=True, dtype=int)
+    test = pd.get_dummies(test, columns=onehot_cols, drop_first=True, dtype=int)
 
     # Align columns (train may have cols test doesn't and vice versa)
     train_cols = set(train.columns)
@@ -210,39 +358,12 @@ def encode_features(
     # Same column order
     test = test[train.columns]
 
-    # --- Drop remaining categoricals ---
-    drop_cats = ["exterior_color", "city", "brand_body"]
-    train = train.drop(columns=[c for c in drop_cats if c in train.columns])
-    test = test.drop(columns=[c for c in drop_cats if c in test.columns])
-
     return train, test
-
-
-def prune_features(
-        X_train: pd.DataFrame,
-        y_train: pd.Series,
-        X_test: pd.DataFrame,
-        importance_threshold: float = 0.001,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Remove features with very low importance."""
-    from sklearn.ensemble import RandomForestRegressor
-
-    rf = RandomForestRegressor(n_estimators=100, max_depth=15, random_state=RANDOM_STATE, n_jobs=-1)
-    rf.fit(X_train, y_train)
-    importances = pd.Series(rf.feature_importances_, index=X_train.columns)
-    keep = importances[importances >= importance_threshold].index.tolist()
-    dropped = importances[importances < importance_threshold].index.tolist()
-
-    if dropped:
-        print(f"  Pruned {len(dropped)} low-importance features: {dropped}")
-    print(f"  Keeping {len(keep)} features")
-
-    return X_train[keep], X_test[keep]
 
 
 def main():
     print("=" * 70)
-    print("FEATURE ENGINEERING PIPELINE")
+    print("FEATURE ENGINEERING PIPELINE (v2 — improved)")
     print("=" * 70)
 
     # --- Load and clean ---
@@ -262,7 +383,13 @@ def main():
     df = engineer_features(df, ev_specs)
 
     # --- Drop non-feature columns ---
-    drop_cols = ["condition", "year", "mileage_km", "seats", "doors"]
+    # Keep: seats (important for price)
+    # Drop: condition (replaced by is_new), year (replaced by car_age),
+    #        mileage_km (replaced by log_mileage), doors (low signal),
+    #        exterior_color (replaced by color_group),
+    #        has_aftermarket_mods (very low signal)
+    drop_cols = ["condition", "year", "mileage_km", "doors",
+                 "exterior_color", "has_aftermarket_mods"]
     df = df.drop(columns=[c for c in drop_cols if c in df.columns])
 
     # --- Train/Test split (stratified on base_model) ---
@@ -271,11 +398,7 @@ def main():
     features = df.drop(columns=["price_vnd"])
 
     # Stratify on base_model (more meaningful than brand for 93.6% VinFast)
-    # Use base_model_enc as proxy since base_model itself will be dropped
     strat_col = features["base_model"] if "base_model" in features.columns else None
-    if strat_col is None:
-        # base_model might already be dropped, use a derived column
-        strat_col = df["base_model"] if "base_model" in df.columns else None
 
     # For stratification, group rare base_models
     if strat_col is not None:
@@ -318,7 +441,7 @@ def main():
     print(f"  Feature names: {list(X_train.columns)}")
 
     # Skip feature pruning — with target encoding + one-hot,
-    # all 41 features carry signal and we have enough data (2457 rows)
+    # all features carry signal and we have enough data
     print(f"\n--- Keeping all {X_train.shape[1]} features ---")
 
     # --- Scale for LR/SVR ---
@@ -336,9 +459,7 @@ def main():
     y_test_log = np.log1p(y_test)
 
     # --- Sample weights (inverse brand frequency) ---
-    # Reconstruct brand from brand_enc (approximate grouping)
     # Use base_model_enc bins as proxy for weighting
-    # Simpler: weight inversely by base_model_enc quintile
     sw = np.ones(len(y_train))
     if "base_model_enc" in X_train.columns:
         enc_vals = X_train["base_model_enc"]

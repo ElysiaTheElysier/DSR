@@ -105,7 +105,7 @@ def comparison_bar_chart(
 
     model_labels = [m.replace("_", r"\_") for m in models]
 
-    colors = ["#4C72B0", "#DD8452", "#55A868", "#C44E52"]
+    colors = ["#4C72B0", "#DD8452", "#55A868", "#C44E52", "#8172B3"]
 
     axes[0].bar(
         range(len(models)), rmse_vals,
