@@ -2,6 +2,8 @@
 
 End-to-end pipeline for predicting electric vehicle prices in the Vietnamese market, from web scraping to regression modeling. Built as part of the AIL301m course at FPT University.
 
+> **v2 Feature Engineering** — The car pipeline has been upgraded with brand/model normalization (80+ mappings), interaction features, reduced sparsity via target encoding, and improved data quality. See [Feature Engineering v2](#feature-engineering-v2-cars) for details.
+
 ## Project Structure
 
 ```
@@ -29,8 +31,9 @@ ev_car/
 │   └── ...               # Scrapers (bonbanh, chotot, otodien, VFluot, etc.)
 └── src/
     ├── features/
-    │   ├── build_features.py     # Feature engineering pipeline for cars
+    │   ├── build_features.py     # Feature engineering pipeline for cars (v2)
     │   ├── build_features_twowheeler.py # Feature engineering pipeline for two-wheelers
+    │   ├── ev_specs.py           # EV specs lookup builder (battery, range, power)
     │   └── target_encoder.py     # LOO target encoder with smoothing
     └── models/
         ├── run_all.py            # Train & benchmark all car models
@@ -39,7 +42,6 @@ ev_car/
         ├── svr.py                # Support vector regression
         ├── random_forest.py      # Random forest
         ├── xgboost_model.py      # XGBoost
-        ├── lightgbm_model.py     # LightGBM
         ├── benchmark.py          # Cross-model comparison for cars
         └── plotting.py           # Model evaluation plots for cars
 ```
@@ -73,11 +75,11 @@ uv run python scripts/preprocess_rule_based.py
 # 3. LLM feature extraction (optional — requires Ollama with Qwen 2.5)
 uv run python scripts/llm_extraction_local.py
 
-# 4. Feature engineering (clean → encode → split → scale)
+# 4. Feature engineering v2 (normalize → clean → encode → split → scale)
 uv run python -m src.features.build_features
 
-# 5. Train all car models and run benchmark
-uv run python -m src.models.run_all --models linear_regression svr random_forest xgboost lightgbm --benchmark
+# 5. Train all car models and run benchmark (without LightGBM)
+uv run python -m src.models.run_all --models linear_regression svr random_forest xgboost --benchmark
 ```
 
 ### B. Two-Wheelers (Bicycles & Motorbikes) Pipeline
@@ -147,17 +149,35 @@ pdflatex -interaction=nonstopmode presentation.tex
 pdflatex -interaction=nonstopmode presentation.tex
 ```
 
+## Feature Engineering v2 (Cars)
+
+The car feature engineering pipeline was upgraded to address data quality issues and reduce feature sparsity:
+
+| Improvement | Before (v1) | After (v2) |
+|---|---|---|
+| Brand normalization | None (`VinFast`/`Vinfast` treated as different) | 15+ mappings applied before dedup |
+| Base model normalization | None (`VFe34`/`VF e34`/`E34` all separate) | 80+ mappings unifying variants |
+| `base_model` encoding | One-hot (22 sparse columns) | Target encoding (1 dense column) |
+| `exterior_color` encoding | One-hot (11 columns) | Grouped into 4 categories (3 columns) |
+| `brand_body` interaction | Created then dropped | Target-encoded (1 column) |
+| `seats` column | Dropped | Kept (imputed per base_model) |
+| Interaction features | None | 5 new: `mileage_x_age`, `range_per_kwh`, `hp_per_kwh`, `is_luxury_brand`, `battery_tier` |
+| `has_aftermarket_mods` | Kept (very low signal) | Dropped |
+| Estimated total features | ~67 | ~30 (denser, higher signal) |
+
 ## Key Results
 
 ### Electric Cars Benchmarking
-| Model | RMSE (M VND) | MAE (M VND) | R² |
-|---|---|---|---|
-| Ridge | 381 | 115 | 0.636 |
-| SVR | 369 | 94 | 0.660 |
-| **Random Forest** | **332** | **89** | **0.725** |
-| XGBoost | 383 | 103 | 0.633 |
+| Model | RMSE (M VND) | MAE (M VND) | R² | Adj R² |
+|---|---|---|---|---|
+| **Random Forest** | **325** | **152** | **0.682** | **0.668** |
+| XGBoost | 361 | 180 | 0.610 | 0.592 |
+| SVR | 396 | 136 | 0.530 | 0.509 |
+| Ridge | 330B | 14.3B | -328K | - |
 
-Data quality fixes (chotot.com price correction, deduplication, BYD removal) reduced RMSE by **67%** (1.02B → 332M VND) — far more impactful than model selection (15% difference between best and worst).
+Data quality fixes (chotot.com price correction, deduplication, BYD removal) reduced RMSE by **67%** (1.02B → 325M VND) — far more impactful than model selection.
+
+> **Note:** Results above are from the v1 feature set. Re-running with v2 features is expected to further improve R² and reduce RMSE/MAE thanks to brand/model normalization, reduced sparsity, and interaction features.
 
 ### Two-Wheelers Benchmarking
 | Model | Test RMSE (M VND) | Test MAE (M VND) | Test R² | Test MAPE (%) |
@@ -166,7 +186,7 @@ Data quality fixes (chotot.com price correction, deduplication, BYD removal) red
 | SVR | 5.54 | 3.82 | 0.760 | 57.03% |
 | Random Forest | 5.61 | 3.93 | 0.754 | 61.00% |
 | **XGBoost** | **5.29** | **3.69** | **0.782** | **57.51%** |
-| LightGBM | 5.56 | 3.91 | 0.759 | 60.10% |
 
-For two-wheelers, **XGBoost** achieves the highest performance with a Test $R^2$ of **0.782**, closely followed by SVR and LightGBM.
+
+For two-wheelers, **XGBoost** achieves the highest performance with a Test R² of **0.782**, closely followed by SVR and LightGBM.
 All two-wheeler evaluation plots are saved to `reports/two_wheelers/`.
